@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Tensorflow JS - Wine NN</title>
+  <meta charset="utf-8"></meta>
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"/>
+  <meta name="author" content="Daniel Chang"/>
+  <meta name="keywords" content="tensorflow, tensorflowJS, classification"/>
+  <meta name="description" content="Wine dataset classification with tensorflowJS"/>
+  <!--<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@0.7.0"></script>-->
+
+  <script src="tf07.js"></script>
+  <script src="d3.min.js"></script>
+  <script src="lodash.min.js"></script>
+
+  <script src="nn.js"></script>
+  <script src="wine.js"></script>
+  <link href="style.css" rel="stylesheet">
+</head>
+<body>
+  <section>
+    <h2 style="margin-bottom: 1px">Wine classification</h2>
+    <small>...AKA mucking around with TensorflowJS</small>
+    <p>Well-known wine dataset consisting of 178 wines with 13 features, and divided into 3 categories. 
+    Click the check boxes to select features you want to use to train the neural network. Click train 
+    to start the training/fitting process. Note 20 out of 178 wines are reserved for testing/validation. </p>
+
+    <div class="row">
+      <div id="feature-list" style="margin-right:80px">
+      </div>
+      <div style="text-align: right">
+        <div>Learning rate 
+          <input id="rate-slider" type="range" min="0.01" max="0.10" step="0.01" value="0.02" oninput="updateLabel()">
+          <span id="rate-label"></span>
+        </div>
+        <br>
+        <div>Number epochs 
+          <input id="epoch-slider" type="range" min="5" max="200" step="5" value="60" oninput="updateLabel()">
+          <span id="epoch-label"></span>
+        </div>
+        <br>
+        <button onclick="train()">Train Network</button>
+        <br>
+        <br>
+        <div>
+          <h3 id="progress"></h3>
+          <h3 id="done" style="color:#369"></h3>
+        </div>
+      </div>
+    </div>
+    <br>
+  </section>
+</body>
+
+<script>
+const shuffled = _.shuffle(WINE_DATA);
+let epochs = 60;
+let learningRate = 0.02;
+
+
+let featureUsed = WINE_FEATURES.map(d => Math.random()> 0.5 ? true : false);
+
+let featureGroups = d3.select('#feature-list')
+  .selectAll('div')
+  .data(WINE_FEATURES)
+  .enter()
+  .append('div');
+
+featureGroups.append('input').attr('type', 'checkbox').attr('checked', (d, i) => {
+  return featureUsed[i] === false ? null : 1;
+}).on('click', (d, i) => {
+  featureUsed[i] = !featureUsed[i];
+  console.log('featureUsed', featureUsed);
+});
+featureGroups.append('label').html( d=> d);
+
+
+function filterFeature(vals) {
+  let r = [];
+  vals.forEach((v, idx) => {
+    if (featureUsed[idx] === true) {
+      r.push(v);
+    }
+  });
+  return r;
+}
+
+function updateLabel() {
+  learningRate = parseFloat(d3.select('#rate-slider').node().value);
+  epochs = parseFloat(d3.select('#epoch-slider').node().value);
+
+  d3.select('#rate-label').html(learningRate);
+  d3.select('#epoch-label').html(epochs);
+}
+
+
+function getData(numTest=20) {
+  const data = [];
+  const label  = [];
+
+  _.cloneDeep(shuffled).forEach( w => {
+    let l = w.splice(0, 1);
+    label.push(l[0] - 1); // Fix label so it is 0-2 intead of 1-3
+    data.push(filterFeature(w));
+  });
+
+  const numFeatures = data[0].length;
+  const numData = data.length;
+  console.log('Processing data, #-features', numFeatures, ' #-data', numData);
+
+  const xs = tf.tensor2d(data);
+  const ys = tf.oneHot(tf.tensor1d(label), 3);
+  const xTest   = xs.slice([0, 0], [numTest, numFeatures]);
+  const xTrain  = xs.slice([numTest, 0], [numData-numTest, numFeatures]);
+  const yTest  = ys.slice([0, 0], [numTest, 3]);
+  const yTrain = ys.slice([numTest, 0], [numData-numTest, 3]);
+  
+  return [xTrain, yTrain, xTest, yTest];
+}
+
+
+function train() {
+  d3.select('#progress').html('Setting up...');
+  d3.select('#done').html('');
+
+  const [xTrain, yTrain, xTest, yTest] = getData();
+  trainModel(xTrain, yTrain, xTest, yTest, {
+    epochs: epochs,
+    learningRate: learningRate,
+    onEpochEnd: (epoch, logs) => {
+      d3.select('#progress').html('Epoch: ' + (epoch+1) + '<br>Accuracy: ' + logs.acc.toFixed(4));
+    },
+    onTrainEnd: () => {
+      console.log('training done');
+      d3.select('#done').html('Done !!!');
+    }
+  });
+  // console.log('model', model);
+}
+
+
+updateLabel();
+
+
+</script>
+</html>
